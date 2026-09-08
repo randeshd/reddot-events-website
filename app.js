@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFAQAccordion();
     initContactForm();
     initMobileNav();
+    initHeaderDarkState();
     initScrollSpy();
     initScrollReveals();
     updateYear();
@@ -31,8 +32,16 @@ function initThreeRedMesh() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
     // Create Organic Icosahedron Wireframe Mesh
-    const detailLevel = window.innerWidth <= 768 ? 2 : 3;
-    const geometry = new THREE.IcosahedronGeometry(3.0, detailLevel);
+    const compact = window.innerWidth <= 768;
+
+    // Desktop keeps the wide, airy orb. On phones that same orb at detail 2 fills
+    // the canvas and cuts through the headline, so use a sparser, dimmer facet and
+    // drop it toward the lower Hero to anchor the composition instead.
+    const preset = compact
+        ? { detail: 1, opacity: 0.34, scale: 0.72, y: -1.1, z: -0.8, spinX: 0.0016, spinY: 0.0028 }
+        : { detail: 3, opacity: 0.65, scale: 1, y: 0, z: 0, spinX: 0.003, spinY: 0.005 };
+
+    const geometry = new THREE.IcosahedronGeometry(3.0, preset.detail);
     
     // Store Original Vertices for Sine-Wave Noise Displacement
     const posAttribute = geometry.attributes.position;
@@ -49,14 +58,15 @@ function initThreeRedMesh() {
         color: 0xE60026,
         wireframe: true,
         transparent: true,
-        opacity: 0.65
+        opacity: preset.opacity
     });
 
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
     // Position mesh in background center of Hero
-    mesh.position.set(0, 0, 0);
+    mesh.position.set(0, preset.y, preset.z);
+    mesh.scale.setScalar(preset.scale);
 
     // Mouse Inertia Interaction
     let targetRotX = 0;
@@ -115,14 +125,19 @@ function initThreeRedMesh() {
         targetRotX = mouseNormY * 0.35;
         targetRotY = mouseNormX * 0.5;
 
-        mesh.rotation.x += (targetRotX - mesh.rotation.x) * 0.04 + 0.003;
-        mesh.rotation.y += (targetRotY - mesh.rotation.y) * 0.04 + 0.005;
+        mesh.rotation.x += (targetRotX - mesh.rotation.x) * 0.04 + preset.spinX;
+        mesh.rotation.y += (targetRotY - mesh.rotation.y) * 0.04 + preset.spinY;
 
-        // 3. Scroll Scale & Shift Interaction
-        const scrollFactor = Math.min(scrollOffsetY / 700, 1.2);
-        const scaleVal = Math.max(1 - scrollFactor * 0.35, 0.4);
-        mesh.scale.set(scaleVal, scaleVal, scaleVal);
-        mesh.position.y = -scrollFactor * 1.2;
+        // 3. Scroll Scale & Shift Interaction (pointer devices only)
+        const breathe = 1 + Math.sin(elapsedTime * 0.8) * 0.04;
+        if (!compact) {
+            const scrollFactor = Math.min(scrollOffsetY / 700, 1.2);
+            const scaleVal = preset.scale * breathe * Math.max(1 - scrollFactor * 0.35, 0.4);
+            mesh.scale.setScalar(scaleVal);
+            mesh.position.y = preset.y - scrollFactor * 1.2;
+        } else {
+            mesh.scale.setScalar(preset.scale * breathe);
+        }
 
         renderer.render(scene, camera);
     }
@@ -216,6 +231,25 @@ function initMobileNav() {
             drawer.classList.remove('open');
         }
     });
+}
+
+/* --------------------------------------------------------------------------
+   Floating Header Dark-Glass State (over the What We Do section)
+   -------------------------------------------------------------------------- */
+function initHeaderDarkState() {
+    const header = document.getElementById('headerNav');
+    const darkSection = document.getElementById('what-we-do');
+    if (!header || !darkSection) return;
+
+    const evaluate = () => {
+        const headerMid = header.getBoundingClientRect().bottom - header.offsetHeight / 2;
+        const { top, bottom } = darkSection.getBoundingClientRect();
+        header.classList.toggle('nav-over-dark', headerMid > top && headerMid < bottom);
+    };
+
+    window.addEventListener('scroll', evaluate, { passive: true });
+    window.addEventListener('resize', evaluate);
+    evaluate();
 }
 
 /* --------------------------------------------------------------------------
